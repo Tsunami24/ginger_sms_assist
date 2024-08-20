@@ -10,11 +10,10 @@ def receive_sms(data):
 
 def send_sms(to, text):
     response = sms.send_message({
-        'from': 'Ginger',
+        'from': Config.VONAGE_FROM_NUMBER,
         'to': to,
         'text': text,
     })
-    
     if response['messages'][0]['status'] == '0':
         print(f"Message sent successfully to {to}")
     else:
