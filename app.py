@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from utils.vonage_handler import receive_sms, send_sms
+from utils.vonage_handler import send_sms
 from utils.openai_handler import generate_response
 from utils.user_handler import get_user_context, update_user_context
 from config import Config
@@ -8,7 +8,6 @@ import logging
 app = Flask(__name__)
 app.config.from_object(Config)
 
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 
 @app.route('/webhook', methods=['POST'])
@@ -18,8 +17,7 @@ def webhook():
     app.logger.info(f"Request form data: {request.form}")
     app.logger.info(f"Request JSON data: {request.json}")
     
-    # Try to get data from different sources
-    data = request.json or request.form or {}
+    data = request.form or request.json or {}
     
     app.logger.info(f"Processed data: {data}")
 
@@ -32,21 +30,16 @@ def webhook():
 
     app.logger.info(f"Processing message from {sender}: {message}")
 
-    # Get user context
-    user_context = get_user_context(sender)
-
-    # Generate AI response
-    ai_response = generate_response(message, user_context)
-
-    # Update user context
-    update_user_context(sender, message, ai_response)
-
-    # Send response via SMS
-    send_sms(sender, ai_response)
-
-    app.logger.info(f"Sent response to {sender}: {ai_response}")
-
-    return jsonify({"status": "success"}), 200
+    try:
+        user_context = get_user_context(sender)
+        ai_response = generate_response(message, user_context)
+        update_user_context(sender, message, ai_response)
+        send_sms(sender, ai_response)
+        app.logger.info(f"Sent response to {sender}: {ai_response}")
+        return jsonify({"status": "success"}), 200
+    except Exception as e:
+        app.logger.error(f"Error processing message: {str(e)}")
+        return jsonify({"status": "error", "message": "Internal server error"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
