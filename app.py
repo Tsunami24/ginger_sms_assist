@@ -10,6 +10,10 @@ app.config.from_object(Config)
 
 logging.basicConfig(level=logging.INFO)
 
+print("Starting application...")
+Config.check_config()
+print("Configuration loaded.")
+
 @app.route('/webhook', methods=['POST'])
 def webhook():
     app.logger.info("Received webhook")
