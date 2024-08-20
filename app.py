@@ -14,14 +14,16 @@ logging.basicConfig(level=logging.INFO)
 @app.route('/webhook', methods=['POST'])
 def webhook():
     app.logger.info("Received webhook")
-    data = request.get_json()
-    app.logger.info(f"Webhook data: {data}")
+    app.logger.info(f"Request headers: {request.headers}")
+    app.logger.info(f"Request form data: {request.form}")
+    app.logger.info(f"Request JSON data: {request.json}")
+    
+    # Try to get data from different sources
+    data = request.json or request.form or {}
+    
+    app.logger.info(f"Processed data: {data}")
 
-    if not data:
-        app.logger.error("No data received in webhook")
-        return jsonify({"status": "error", "message": "No data received"}), 400
-
-    sender = data.get('from')
+    sender = data.get('msisdn') or data.get('from')
     message = data.get('text')
 
     if not sender or not message:
