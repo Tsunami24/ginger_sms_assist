@@ -2,8 +2,16 @@ from flask import Flask, request, jsonify
 from utils.vonage_handler import send_sms
 from utils.openai_handler import generate_response
 from utils.user_handler import get_user_context, update_user_context
+from utils.cache import cached_generate_response
 from config import Config
 import logging
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from dotenv import load_dotenv
+import os
+
+# Load .env file
+load_dotenv()
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -11,8 +19,18 @@ app.config.from_object(Config)
 logging.basicConfig(level=logging.INFO)
 
 print("Starting application...")
+print("VONAGE_FROM_NUMBER:", os.environ.get('VONAGE_FROM_NUMBER'))
 Config.check_config()
 print("Configuration loaded.")
+
+executor = ThreadPoolExecutor(max_workers=3)
+
+def process_message(sender, message):
+    user_context = get_user_context(sender)
+    ai_response = cached_generate_response(message, user_context)
+    update_user_context(sender, message, ai_response)
+    send_sms(sender, ai_response)
+    return ai_response
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -35,15 +53,17 @@ def webhook():
     app.logger.info(f"Processing message from {sender}: {message}")
 
     try:
-        user_context = get_user_context(sender)
-        ai_response = generate_response(message, user_context)
-        update_user_context(sender, message, ai_response)
-        send_sms(sender, ai_response)
+        future = executor.submit(process_message, sender, message)
+        ai_response = future.result(timeout=25)  # 25 seconds timeout
         app.logger.info(f"Sent response to {sender}: {ai_response}")
         return jsonify({"status": "success"}), 200
     except Exception as e:
         app.logger.error(f"Error processing message: {str(e)}")
         return jsonify({"status": "error", "message": "Internal server error"}), 500
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({"status": "healthy", "VONAGE_FROM_NUMBER": os.environ.get('VONAGE_FROM_NUMBER')}), 200
 
 if __name__ == '__main__':
     app.run(debug=True)
